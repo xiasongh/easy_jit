@@ -383,6 +383,11 @@ namespace easy {
       for(GlobalValue &GV : M.global_values()) {
         if(GV.getName().startswith("llvm."))
           continue;
+
+        if(GlobalObject* GO = dyn_cast<GlobalObject>(&GV)) {
+          GO->setComdat(nullptr);
+        }
+
         if(auto* GVar = dyn_cast<GlobalVariable>(&GV)) {
           // gv becomes a declaration
           GVar->setInitializer(nullptr);
