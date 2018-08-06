@@ -1,5 +1,3 @@
-llvm_map_components_to_libnames(RUNTIME_LLVM_LIBS core codegen interpreter support mcjit native executionengine passes objcarcopts)
-
 add_library(EasyJitRuntime SHARED
   BitcodeTracker.cpp
   Context.cpp
@@ -11,7 +9,8 @@ add_library(EasyJitRuntime SHARED
   pass/InlineParameters.cpp
 )
 
-target_link_libraries(EasyJitRuntime ${RUNTIME_LLVM_LIBS})
+llvm_config(EasyJitRuntime core codegen interpreter support mcjit native executionengine passes objcarcopts)
+
 
 set(EASY_JIT_RUNTIME ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libEasyJitRuntime${CMAKE_SHARED_LIBRARY_SUFFIX} PARENT_SCOPE)
 
