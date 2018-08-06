@@ -14,7 +14,7 @@ script = travis['script']
 
 # I could not get a better way to do this
 AddSourceCmd = {
-  "llvm-toolchain-trusty-5.0" : "deb http://apt.llvm.org/trusty/ llvm-toolchain-trusty-5.0 main | tee -a /etc/apt/sources.list > /dev/null",
+  "llvm-toolchain-trusty-6.0" : "deb http://apt.llvm.org/trusty/ llvm-toolchain-trusty-6.0 main | tee -a /etc/apt/sources.list > /dev/null",
   "ubuntu-toolchain-r-test" : "apt-add-repository -y \"ppa:ubuntu-toolchain-r/test\""
 }
 

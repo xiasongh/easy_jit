@@ -20,13 +20,13 @@ Building
 First, install clang and LLVM.
 
 ```bash
-apt install llvm-5.0-dev llvm-5.0-tools clang-5.0
+apt install llvm-6.0-dev llvm-6.0-tools clang-6.0
 ```
 
 Then, configure and compile the project.
 
 ```bash
-cmake -DLLVM_DIR=/usr/lib/llvm-5.0/cmake <path_to_easy_jit_src>
+cmake -DLLVM_DIR=/usr/lib/llvm-6.0/cmake <path_to_easy_jit_src>
 cmake --build .
 ```
 
@@ -69,7 +69,7 @@ Finaly, the binary must be linked against the Easy::Jit runtime library, using
 Putting all together we get the command bellow.
 
 ```bash
-clang++-5.0 --std=c++14 <my_file.cpp> \
+clang++-6.0 --std=c++14 <my_file.cpp> \
   -Xclang -load -Xclang /path/to/easy/jit/build/bin/bin/EasyJitPass.so \
   -I<path_to_easy_jit_src>/cpplib/include \
   -L<path_to_easy_jit_build>/bin -lEasyJitRuntime
