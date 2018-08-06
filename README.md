@@ -196,4 +196,4 @@ Serge Guelton (serge_sans_paille)
 
 Juan Manuel Martinez Caamaño (jmmartinez)
 
-
+Kavon Farvardin (kavon) author of [atJIT](https://github.com/kavon/atJIT)
