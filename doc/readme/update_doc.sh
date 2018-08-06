@@ -1,5 +1,8 @@
 #!/bin/bash
 
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+pushd $DIR >> /dev/null
+
 easy_jit_dir=../../
 export PYTHONIOENCODING="utf-8"
 
