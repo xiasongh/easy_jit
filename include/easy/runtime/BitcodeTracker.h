@@ -5,6 +5,8 @@
 #include <llvm/IR/Module.h>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 
+#include <easy/param.h>
+
 #include <unordered_map>
 #include <memory>
 
@@ -26,11 +28,18 @@ struct FunctionInfo {
   { }
 };
 
+struct LayoutInfo {
+  size_t NumFields;
+};
+
 class BitcodeTracker {
 
   // map function to all the info required for jit compilation
   std::unordered_map<void*, FunctionInfo> Functions;
   std::unordered_map<std::string, void*> NameToAddress;
+
+  // map the addresses of the layout_id with the number of parameters
+  std::unordered_map<void*, LayoutInfo> Layouts;
 
   public:
 
@@ -39,9 +48,14 @@ class BitcodeTracker {
     NameToAddress.emplace(Name, FPtr);
   }
 
+  void registerLayout(layout_id Id, size_t N) {
+    Layouts.emplace(Id, LayoutInfo{N});
+  }
+
   void* getAddress(std::string const &Name);
   std::tuple<const char*, GlobalMapping*> getNameAndGlobalMapping(void* FPtr);
   bool hasGlobalMapping(void* FPtr) const;
+  LayoutInfo const & getLayoutInfo(easy::layout_id id) const;
 
   using ModuleContextPair = std::pair<std::unique_ptr<llvm::Module>, std::unique_ptr<llvm::LLVMContext>>;
   ModuleContextPair getModule(void* FPtr);

@@ -23,6 +23,12 @@ bool BitcodeTracker::hasGlobalMapping(void* FPtr) const {
   return InfoPtr != Functions.end();
 }
 
+LayoutInfo const & BitcodeTracker::getLayoutInfo(easy::layout_id id) const {
+  auto InfoPair = Layouts.find(id);
+  assert(InfoPair != Layouts.end());
+  return InfoPair->second;
+}
+
 void* BitcodeTracker::getAddress(std::string const &Name) {
   auto Addr = NameToAddress.find(Name);
   if(Addr == NameToAddress.end())
@@ -70,6 +76,9 @@ BitcodeTracker::ModuleContextPair BitcodeTracker::getModule(void* FPtr) {
 extern "C" {
 void easy_register(void* FPtr, const char* Name, GlobalMapping* Globals, const char* Bitcode, size_t BitcodeLen) {
   BitcodeTracker::GetTracker().registerFunction(FPtr, Name, Globals, Bitcode, BitcodeLen);
+}
+void easy_register_layout(layout_id Id, size_t N) {
+  BitcodeTracker::GetTracker().registerLayout(Id, N);
 }
 }
 

@@ -1,6 +1,8 @@
 add_llvm_loadable_module(EasyJitPass
   RegisterPasses.cpp
   Easy.cpp
+  Layout.cpp
+  Utils.cpp
   MayAliasTracer.cpp
   PLUGIN_TOOL clang
   )

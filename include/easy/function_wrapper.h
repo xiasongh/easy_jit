@@ -63,7 +63,7 @@ class FunctionWrapper<Ret(Params...)> :
   }
 
   auto getFunctionPointer() const {
-    return ((Ret(*)(Params...))getRawPointer());
+    return ((Ret(__cdecl *)(Params...))getRawPointer());
   }
 
   static FunctionWrapper<Ret(Params...)> deserialize(std::istream& is) {
@@ -86,7 +86,7 @@ class FunctionWrapper<void(Params...)> :
   }
 
   auto getFunctionPointer() const {
-    return ((void(*)(Params...))getRawPointer());
+    return ((void(__cdecl *)(Params...))getRawPointer());
   }
 
   static FunctionWrapper<void(Params...)> deserialize(std::istream& is) {

@@ -1,5 +1,4 @@
 #include <easy/runtime/RuntimePasses.h>
-#include <easy/runtime/BitcodeTracker.h>
 #include <easy/runtime/Utils.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Function.h>
@@ -8,11 +7,15 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/Linker/Linker.h>
 #include <llvm/ADT/SmallVector.h>
+#include <llvm/ADT/SmallSet.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 #include <llvm/Support/raw_ostream.h>
 #include <numeric>
 
+#include "InlineParametersHelper.h"
+
 using namespace llvm;
+using easy::HighLevelLayout;
 
 char easy::InlineParameters::ID = 0;
 
@@ -20,140 +23,114 @@ llvm::Pass* easy::createInlineParametersPass(llvm::StringRef Name) {
   return new InlineParameters(Name);
 }
 
-static size_t GetNewArgCount(easy::Context const &C) {
-  size_t Max = 0;
-  for(auto const &Arg : C) {
-    if(auto const* Forward = Arg->as<easy::ForwardArgument>()) {
-      Max = std::max<size_t>(Forward->get()+1, Max);
-    }
-  }
-  return Max;
-}
+HighLevelLayout GetNewLayout(easy::Context const &C, HighLevelLayout &HLL) {
 
-FunctionType* GetWrapperTy(FunctionType *FTy, bool StructReturn, easy::Context const &C) {
+  assert(C.size() == HLL.Args_.size());
 
-  Type* RetTy = FTy->getReturnType();
+  size_t NNewArgs = 0;
+  for(auto const &Arg : C)
+    if(auto const *Map = Arg->as<easy::ForwardArgument>())
+      NNewArgs = std::max<size_t>(NNewArgs, Map->get()+1);
 
-  size_t StructReturnOffset = StructReturn ? 1 : 0;
+  HighLevelLayout NewHLL(HLL);
+  NewHLL.Args_.clear();
+  NewHLL.Args_.resize(NNewArgs, HighLevelLayout::HighLevelArg());
 
-  size_t NewArgCount = GetNewArgCount(C) + StructReturnOffset;
-  SmallVector<Type*, 8> Args(NewArgCount, nullptr);
+  SmallSet<unsigned, 8> VisitedArgs;
 
-  if(StructReturn)
-    Args[0] = FTy->getParamType(0);
-
-  for(size_t i = 0, n = C.size(); i != n; ++i) {
-    if(auto const *Arg = C.getArgumentMapping(i).as<easy::ForwardArgument>()) {
-      size_t param_idx = Arg->get() + StructReturnOffset;
-      if(!Args[param_idx])
-        Args[param_idx] = FTy->getParamType(i + StructReturnOffset);
+  // only forwarded params are kept
+  for(size_t arg = 0; arg != HLL.Args_.size(); ++arg) {
+    if(auto const *Map = C.getArgumentMapping(arg).as<easy::ForwardArgument>()) {
+      if(!VisitedArgs.insert(Map->get()).second)
+        continue;
+      NewHLL.Args_[Map->get()] = HLL.Args_[arg];
     }
   }
 
-  return FunctionType::get(RetTy, Args, FTy->isVarArg());
+  // set the param_idx once all the parameter sizes are known
+  for(size_t new_arg = 0, ParamIdx = 0; new_arg != NewHLL.Args_.size(); ++new_arg) {
+    NewHLL.Args_[new_arg].FirstParamIdx_ = ParamIdx;
+    ParamIdx += NewHLL.Args_[new_arg].Types_.size();
+  }
+  return NewHLL;
 }
 
-void GetInlineArgs(easy::Context const &C, FunctionType& OldTy, bool StructReturn, Function &Wrapper, SmallVectorImpl<Value*> &Args, IRBuilder<> &B) {
-  LLVMContext &Ctx = OldTy.getContext();
-  SmallVector<Value*, 8> WrapperArgs(Wrapper.getFunctionType()->getNumParams());
-  std::transform(Wrapper.arg_begin(), Wrapper.arg_end(),
-                 WrapperArgs.begin(), [](llvm::Argument &A)->Value*{return &A;});
+FunctionType* GetWrapperTy(HighLevelLayout &HLL) {
+  SmallVector<Type*, 8> Args;
+  if(HLL.StructReturn_)
+    Args.push_back(HLL.StructReturn_);
+  for(auto &HLArg : HLL.Args_)
+    Args.insert(Args.end(), HLArg.Types_.begin(), HLArg.Types_.end());
+  return FunctionType::get(HLL.Return_, Args, false);
+}
 
-  size_t StructReturnOffset = StructReturn ? 1 : 0;
-  if(StructReturn) {
-    Args.push_back(WrapperArgs[0]);
-  }
+void GetInlineArgs(easy::Context const &C,
+                   Function& F, HighLevelLayout &FHLL,
+                   Function &Wrapper, HighLevelLayout &WrapperHLL,
+                   SmallVectorImpl<Value*> &Args, IRBuilder<> &B) {
+
+  LLVMContext &Ctx = F.getContext();
+  DataLayout const &DL = F.getParent()->getDataLayout();
+
+  if(FHLL.StructReturn_)
+    Args.push_back(&*Wrapper.arg_begin());
 
   for(size_t i = 0, n = C.size(); i != n; ++i) {
     auto const &Arg = C.getArgumentMapping(i);
-    Type* ParamTy = OldTy.getParamType(i+StructReturnOffset);
+    auto &ArgInF = FHLL.Args_[i];
+
     switch(Arg.kind()) {
 
       case easy::ArgumentBase::AK_Forward: {
-        auto const *Forward = Arg.as<easy::ForwardArgument>();
-        Args.push_back(WrapperArgs[Forward->get()+StructReturnOffset]);
+        auto Forward = GetForwardArgs(ArgInF, FHLL, Wrapper, WrapperHLL);
+        Args.insert(Args.end(), Forward.begin(), Forward.end());
       } break;
-
-      case easy::ArgumentBase::AK_Int: {
-        auto const *Int = Arg.as<easy::IntArgument>();
-        Args.push_back(ConstantInt::get(ParamTy, Int->get(), true));
-      } break;
-
+      case easy::ArgumentBase::AK_Int:
       case easy::ArgumentBase::AK_Float: {
-        auto const *Float = Arg.as<easy::FloatArgument>();
-        Args.push_back(ConstantFP::get(ParamTy, Float->get()));
+        Args.push_back(easy::GetScalarArgument(Arg, ArgInF.Types_[0]));
       } break;
 
       case easy::ArgumentBase::AK_Ptr: {
         auto const *Ptr = Arg.as<easy::PtrArgument>();
-        Constant* Repl = nullptr;
-        auto &BT = easy::BitcodeTracker::GetTracker();
-        void* PtrValue = const_cast<void*>(Ptr->get());
-        if(BT.hasGlobalMapping(PtrValue)) {
-          const char* LName = std::get<0>(BT.getNameAndGlobalMapping(PtrValue));
-          std::unique_ptr<Module> LM = BT.getModuleWithContext(PtrValue, Ctx);
-          Module* M = Wrapper.getParent();
+        Type* PtrTy = FHLL.Args_[i].Types_[0];
 
-          if(!Linker::linkModules(*M, std::move(LM), Linker::OverrideFromSrc,
-                                  [](Module &, const StringSet<> &){}))
-          {
-            GlobalValue *GV = M->getNamedValue(LName);
-            if(GlobalVariable* G = dyn_cast<GlobalVariable>(GV)) {
-              GV->setLinkage(Function::PrivateLinkage);
-              Repl = GV;
+        Constant* PtrVal = easy::GetScalarArgument(Arg, PtrTy);
+        if(Constant* LinkedPtr = easy::LinkPointerIfPossible(*Wrapper.getParent(), *Ptr, PtrTy))
+          PtrVal = LinkedPtr;
 
-              if(Repl->getType() != ParamTy) {
-                Repl = ConstantExpr::getPointerCast(Repl, ParamTy);
-              }
-            }
-            else if(Function* F = dyn_cast<Function>(GV)) {
-              F->setLinkage(Function::PrivateLinkage);
-              Repl = F;
-            }
-            else {
-              assert(false && "wtf");
-            }
-          }
-        }
-        if(!Repl) { // default
-          Repl =
-              ConstantExpr::getIntToPtr(
-                ConstantInt::get(Type::getInt64Ty(Ctx), (uintptr_t)Ptr->get(), false),
-                ParamTy);
-        }
-
-        Args.push_back(Repl);
+        Args.push_back(PtrVal);
       } break;
 
       case easy::ArgumentBase::AK_Struct: {
         auto const *Struct = Arg.as<easy::StructArgument>();
-        Type* Int8 = Type::getInt8Ty(Ctx);
-        std::vector<char> const &Raw =  Struct->get();
-        std::vector<Constant*> Data(Raw.size());
-        for(size_t i = 0, n = Raw.size(); i != n; ++i)
-          Data[i] = ConstantInt::get(Int8, Raw[i], false);
-        Constant* CD = ConstantVector::get(Data);
+        auto &ArgInF = FHLL.Args_[i];
 
-        bool PassedByPtr = ParamTy->isPointerTy();
-        Type* StructType = PassedByPtr ?
-                    ParamTy->getContainedType(0) : ParamTy;
-
-        if(ParamTy->isPointerTy()) {
-          // big structures are passed by pointer, create a local alloca
-          AllocaInst* Alloc = B.CreateAlloca(StructType, 0, "param_alloc");
-          Value* AllocCast =
-                  B.CreatePointerCast(Alloc,
-                                      PointerType::getUnqual(CD->getType()));
-          B.CreateStore(CD, AllocCast);
-          Args.push_back(Alloc);
+        if(ArgInF.StructByPointer_) {
+          // struct is passed trough a pointer
+          AllocaInst* ParamAlloc = easy::GetStructAlloc(B, DL, *Struct, ArgInF.Types_[0]);
+          Args.push_back(ParamAlloc);
         } else {
-          // small structures are passed by value, cast it directly
-          Constant* ConstantStruct = ConstantExpr::getBitCast(CD, StructType);
-          Args.push_back(ConstantStruct);
+          // struct is passed by value (may be many values)
+          size_t N = ArgInF.Types_.size();
+          for(size_t ParamIdx = 0, RawOffset = 0; ParamIdx != N; ++ParamIdx) {
+            Type* FieldTy = ArgInF.Types_[ParamIdx];
+            const char* RawField = &Struct->get()[RawOffset];
+
+            Constant* FieldValue;
+            size_t RawSize;
+            std::tie(FieldValue, RawSize) = easy::GetConstantFromRaw(DL, FieldTy, (uint8_t const*)RawField);
+
+            Args.push_back(FieldValue);
+            RawOffset += RawSize;
+          }
         }
       } break;
 
       case easy::ArgumentBase::AK_Module: {
+
+        auto &ArgInF = FHLL.Args_[i];
+        assert(ArgInF.Types_.size() == 1);
+
         easy::Function const &Function = Arg.as<easy::ModuleArgument>()->get();
         llvm::Module const& FunctionModule = Function.getLLVMModule();
         auto FunctionName = easy::GetEntryFunctionName(FunctionModule);
@@ -181,19 +158,41 @@ void GetInlineArgs(easy::Context const &C, FunctionType& OldTy, bool StructRetur
   }
 }
 
-Function* CreateWrapperFun(Module &M, FunctionType &WrapperTy, Function &F, bool StructReturn, easy::Context const &C) {
+void RemapAttributes(Function const &F, HighLevelLayout const& HLL, Function &Wrapper, HighLevelLayout const& NewHLL) {
+  auto FAttributes = F.getAttributes();
+
+  auto FunAttrs = FAttributes.getFnAttributes();
+  for(Attribute Attr : FunAttrs)
+    Wrapper.addFnAttr(Attr);
+
+  for(size_t new_arg = 0; new_arg != NewHLL.Args_.size(); ++new_arg) {
+    auto const &NewArg = NewHLL.Args_[new_arg];
+    auto const &OrgArg = HLL.Args_[NewArg.Position_];
+
+    for(size_t field = 0; field != NewArg.Types_.size(); ++field) {
+      Wrapper.addParamAttrs(field + NewArg.FirstParamIdx_,
+                             FAttributes.getParamAttributes(field + OrgArg.FirstParamIdx_));
+    }
+  }
+}
+
+Function* CreateWrapperFun(Module &M, Function &F, HighLevelLayout &HLL, easy::Context const &C) {
   LLVMContext &CC = M.getContext();
 
-  Function* Wrapper = Function::Create(&WrapperTy, Function::ExternalLinkage, "", &M);
+  HighLevelLayout NewHLL(GetNewLayout(C, HLL));
+  FunctionType *WrapperTy = GetWrapperTy(NewHLL);
+
+  Function* Wrapper = Function::Create(WrapperTy, Function::ExternalLinkage, "", &M);
+
   BasicBlock* BB = BasicBlock::Create(CC, "", Wrapper);
   IRBuilder<> B(BB);
 
   SmallVector<Value*, 8> Args;
-  GetInlineArgs(C, *F.getFunctionType(), StructReturn, *Wrapper, Args, B);
+  GetInlineArgs(C, F, HLL, *Wrapper, NewHLL, Args, B);
 
   Value* Call = B.CreateCall(&F, Args);
 
-  if(StructReturn) {
+  if(HLL.StructReturn_) {
     Wrapper->arg_begin()->addAttr(Attribute::StructRet);
   }
 
@@ -202,6 +201,8 @@ Function* CreateWrapperFun(Module &M, FunctionType &WrapperTy, Function &F, bool
   } else {
     B.CreateRet(Call);
   }
+
+  RemapAttributes(F, HLL, *Wrapper, NewHLL);
 
   return Wrapper;
 }
@@ -212,24 +213,17 @@ bool easy::InlineParameters::runOnModule(llvm::Module &M) {
   llvm::Function* F = M.getFunction(TargetName_);
   assert(F);
 
-  FunctionType* FTy = F->getFunctionType();
-  bool StructReturn = F->arg_begin()->hasStructRetAttr();
-  assert(FTy->getNumParams() == (C.size() + (StructReturn ? 1 : 0)));
-
-  FunctionType* WrapperTy = GetWrapperTy(FTy, StructReturn, C);
-  llvm::Function* WrapperFun = CreateWrapperFun(M, *WrapperTy, *F, StructReturn, C);
+  HighLevelLayout HLL(C, *F);
+  llvm::Function* WrapperFun = CreateWrapperFun(M, *F, HLL, C);
 
   // privatize F, steal its name, copy its attributes, and its cc
   F->setLinkage(llvm::Function::PrivateLinkage);
   WrapperFun->takeName(F);
-  WrapperFun->setCallingConv(F->getCallingConv());
-
-  auto FunAttrs = F->getAttributes().getFnAttributes();
-  for(Attribute Attr : FunAttrs)
-    WrapperFun->addFnAttr(Attr);
+  WrapperFun->setCallingConv(CallingConv::C);
 
   // add metadata to identify the entry function
   easy::MarkAsEntry(*WrapperFun);
+
 
   return true;
 }

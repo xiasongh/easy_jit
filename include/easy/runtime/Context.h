@@ -5,11 +5,26 @@
 #include <memory>
 #include <cstdint>
 #include <cstring>
+#include <cstdlib>
 #include <string>
 
 #include <easy/runtime/Function.h>
 
 namespace easy {
+
+struct serialized_arg {
+  std::vector<char> buf;
+
+  serialized_arg(char* serialized) {
+    uint32_t size = *reinterpret_cast<uint32_t const*>(serialized);
+    const char* data = serialized + sizeof(uint32_t);
+    buf.insert(buf.end(), data, data+size);
+
+    free(serialized);
+  }
+};
+
+typedef void* layout_id;
 
 struct ArgumentBase {
 
@@ -54,8 +69,8 @@ struct ArgumentBase {
     \
     Type Data_; \
     public: \
-    Name##Argument(Type D) : ArgumentBase(), Data_(D) {}; \
-    virtual ~Name ## Argument() = default; \
+    Name##Argument(Type D) : ArgumentBase(), Data_(D) {} \
+    virtual ~Name ## Argument() override = default ;\
     Type get() const { return Data_; } \
     static constexpr ArgumentKind Kind = AK_##Name;\
     ArgumentKind kind() const noexcept override  { return Kind; } \
@@ -77,25 +92,26 @@ DeclareArgument(Module, easy::Function const&);
 
 class StructArgument
     : public ArgumentBase {
-  std::vector<char> Data_;
+  serialized_arg Data_;
+
   public:
-  StructArgument(const char* Str, size_t Size)
-    : ArgumentBase(), Data_(Str, Str+Size) {};
-  virtual ~StructArgument() = default;
-  std::vector<char> const & get() const { return Data_; }
+  StructArgument(serialized_arg &&arg)
+    : ArgumentBase(), Data_(arg) {}
+  virtual ~StructArgument() override = default;
+  std::vector<char> const & get() const { return Data_.buf; }
   static constexpr ArgumentKind Kind = AK_Struct;
   ArgumentKind kind() const noexcept override  { return Kind; }
 
   protected:
   bool compareWithSameType(ArgumentBase const& Other) const override {
     auto const &OtherCast = static_cast<StructArgument const&>(Other);
-    return Data_ == OtherCast.Data_;
+    return get() == OtherCast.get();
   }
 
   size_t hash() const noexcept override {
     std::hash<int64_t> hash{};
     size_t R = 0;
-    for (char c : Data_)
+    for (char c : get())
       R ^= hash(c);
     return R;
   }
@@ -107,6 +123,11 @@ class Context {
   std::vector<std::unique_ptr<ArgumentBase>> ArgumentMapping_;
   unsigned OptLevel_ = 2, OptSize_ = 0;
   std::string DebugFile_;
+
+  // describes how the arguments of the function are passed
+  //  struct arguments can be packed in a single int, or passed field by field,
+  //  keep track of how many arguments a parameter takes
+  std::vector<layout_id> ArgumentLayout_;
 
   template<class ArgTy, class ... Args>
   inline Context& setArg(Args && ... args) {
@@ -125,17 +146,21 @@ class Context {
   Context& setParameterInt(int64_t);
   Context& setParameterFloat(double);
   Context& setParameterPointer(void const*);
-  Context& setParameterStruct(char const*, size_t);
+  Context& setParameterStruct(serialized_arg);
   Context& setParameterModule(easy::Function const&);
+
+  Context& setArgumentLayout(layout_id id) {
+    ArgumentLayout_.push_back(id); // each layout id is associated with a number of fields in the bitcode tracker
+    return *this;
+  }
+
+  decltype(ArgumentLayout_) const & getLayout() const {
+    return ArgumentLayout_;
+  }
 
   template<class T>
   Context& setParameterTypedPointer(T* ptr) {
     return setParameterPointer(reinterpret_cast<const void*>(ptr));
-  }
-
-  template<class T>
-  Context& setParameterTypedStruct(T* ptr) {
-    return setParameterStruct(reinterpret_cast<char const*>(ptr), sizeof(T));
   }
 
   Context& setOptLevel(unsigned OptLevel, unsigned OptSize) {

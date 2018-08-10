@@ -5,8 +5,32 @@
 #include <easy/function_wrapper.h>
 #include <easy/options.h>
 #include <easy/meta.h>
+#include <easy/attributes.h>
 
 namespace easy {
+
+namespace layout {
+
+  // the address of this function is used as id :)
+  template<class Arg>
+  char* serialize_arg(Arg);
+
+  template<class Arg>
+  layout_id  __attribute__((noinline)) EASY_JIT_LAYOUT get_layout() {
+    // horrible hack to get the ptr of get_struct_layout_internal<Arg> as void*
+    union {
+      void* as_void_ptr;
+      decltype(serialize_arg<Arg>)* as_fun_ptr;
+    } dummy;
+    dummy.as_fun_ptr = serialize_arg<Arg>;
+    return dummy.as_void_ptr;
+  }
+
+  template<class Arg>
+  void set_layout(easy::Context &C) {
+    C.setArgumentLayout(get_layout<Arg>());
+  }
+}
 
 namespace  {
 
@@ -23,8 +47,8 @@ struct set_parameter_helper {
     template<class Param_>
     static std::false_type can_assign_fun_pointer (...);
 
-    using  type = decltype(can_assign_fun_pointer<Param>(
-                             *std::declval<FunctionWrapper>().getFunctionPointer()));
+    using type = decltype(can_assign_fun_pointer<Param>(
+                            *std::declval<FunctionWrapper>().getFunctionPointer()));
 
     static constexpr bool value { type::value };
   };
@@ -34,11 +58,11 @@ struct set_parameter_helper {
 
   template<class _, class Arg>
   static void set_param(Context &C,
-                        _if<(bool)std::is_placeholder<typename std::decay<Arg>::type>::value, Arg>) {
-    C.setParameterIndex(std::is_placeholder<typename std::decay<Arg>::type>::value-1);
+                        _if<(bool)std::is_placeholder<std::decay_t<Arg>>::value, Arg>) {
+    C.setParameterIndex(std::is_placeholder<std::decay_t<Arg>>::value-1);
   }
 
-  template<class Param, class Arg> // TODO use param to perform type checking!
+  template<class Param, class Arg>
   static void set_param(Context &C,
                         _if<easy::is_function_wrapper<Arg>::value, Arg> &&arg) {
     static_assert(function_wrapper_specialization_is_possible<Param, Arg>::value,
@@ -56,31 +80,34 @@ struct set_parameter_helper<false> {
   template<class Param, class Arg>
   static void set_param(Context &C,
                         _if<std::is_integral<Param>::value, Arg> &&arg) {
-    C.setParameterInt(std::forward<Arg>(arg));
+    Param arg_as_param = arg;
+    C.setParameterInt(arg_as_param);
   }
 
   template<class Param, class Arg>
   static void set_param(Context &C,
                         _if<std::is_floating_point<Param>::value, Arg> &&arg) {
-    C.setParameterFloat(std::forward<Arg>(arg));
+    Param arg_as_param = arg;
+    C.setParameterFloat(arg_as_param);
   }
 
   template<class Param, class Arg>
   static void set_param(Context &C,
                         _if<std::is_pointer<Param>::value, Arg> &&arg) {
-    C.setParameterTypedPointer(std::forward<Arg>(arg));
+    Param arg_as_param = arg;
+    C.setParameterTypedPointer(arg_as_param);
   }
 
   template<class Param, class Arg>
   static void set_param(Context &C,
                         _if<std::is_reference<Param>::value, Arg> &&arg) {
-    C.setParameterTypedPointer(std::addressof(arg));
+    C.setParameterTypedPointer(std::addressof<Param>(arg));
   }
 
   template<class Param, class Arg>
   static void set_param(Context &C,
                         _if<std::is_class<Param>::value, Arg> &&arg) {
-    C.setParameterTypedStruct(std::addressof(arg));
+    C.setParameterStruct(layout::serialize_arg<Param>(arg));
   }
 };
 
@@ -125,6 +152,7 @@ set_parameters(ParameterList,
   using Param0 = typename ParameterList::head;
   using ParametersTail = typename ParameterList::tail;
 
+  layout::set_layout<Param0>(C);
   set_parameter<Param0, Arg0>::help::template set_param<Param0, Arg0>(C, std::forward<Arg0>(arg0));
   set_parameters<ParametersTail, Args&&...>(ParametersTail(), C, std::forward<Args>(args)...);
 }

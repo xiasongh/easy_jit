@@ -1,5 +1,4 @@
 #include <easy/attributes.h>
-#include "MayAliasTracer.h"
 
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Constants.h>
@@ -12,7 +11,6 @@
 #include "llvm/InitializePasses.h"
 
 #include <llvm/Transforms/IPO.h>
-#include <llvm/Transforms/Utils/ModuleUtils.h>
 #include <llvm/Transforms/Utils/CtorUtils.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 
@@ -30,6 +28,10 @@
 
 #include <memory>
 
+#include "MayAliasTracer.h"
+#include "StaticPasses.h"
+#include "Utils.h"
+
 using namespace llvm;
 
 static cl::opt<std::string> RegexString("easy-export",
@@ -45,12 +47,17 @@ namespace easy {
 
     bool runOnModule(Module &M) override {
 
+      // execute the rest of the easy::jit passes
+      legacy::PassManager Passes;
+      Passes.add(easy::createRegisterLayoutPass());
+      bool Changed = Passes.run(M);
+
       SmallVector<GlobalObject*, 8> ObjectsToJIT;
 
       collectObjectsToJIT(M, ObjectsToJIT);
 
       if(ObjectsToJIT.empty())
-        return false;
+        return Changed;
 
       SmallVector<GlobalValue*, 8> LocalVariables;
       collectLocalGlobals(M, LocalVariables);
@@ -62,7 +69,7 @@ namespace easy {
       Function* RegisterBitcodeFun = declareRegisterBitcode(M, GlobalMapping);
       registerBitcode(M, ObjectsToJIT, Bitcode, GlobalMapping, RegisterBitcodeFun);
 
-      return true;
+      return Changed;
     }
 
     private:
@@ -405,7 +412,7 @@ namespace easy {
             F->setVisibility(GlobalValue::DefaultVisibility);
             F->setLinkage(GlobalValue::PrivateLinkage);
           }
-        } else assert(false && "TODO: handle aliases, etc.");
+        } else llvm::report_fatal_error("Easy::Jit [not yet implemented]: handle aliases, ifuncs.");
       }
     }
 
@@ -440,7 +447,7 @@ namespace easy {
       Type* BitcodePtr = RegisterBitcodeFun->getFunctionType()->getParamType(3);
       Type* SizeTy = RegisterBitcodeFun->getFunctionType()->getParamType(4);
 
-      Function *Ctor = getCtor(M);
+      Function *Ctor = GetCtor(M, "register_bitcode");
       IRBuilder<> B(Ctor->getEntryBlock().getTerminator());
 
       for(size_t i = 0, n = Objs.size(); i != n; ++i) {
@@ -457,8 +464,6 @@ namespace easy {
         B.CreateCall(RegisterBitcodeFun,
                      {Fun, NameCast, GlobalMapping, Bitcode, BitcodeSize}, "");
       }
-
-      llvm::appendToGlobalCtors(M, Ctor, 65535);
     }
 
     static GlobalVariable* getStringGlobal(Module& M, StringRef Name) {
@@ -466,16 +471,6 @@ namespace easy {
       return new GlobalVariable(M, Init->getType(), true,
                                 GlobalVariable::PrivateLinkage,
                                 Init, Name + "_name");
-    }
-
-    static Function* getCtor(Module &M) {
-      LLVMContext &C = M.getContext();
-      Type* Void = Type::getVoidTy(C);
-      FunctionType* VoidFun = FunctionType::get(Void, false);
-      Function* Ctor = Function::Create(VoidFun, Function::PrivateLinkage, "register_bitcode", &M);
-      BasicBlock* Entry = BasicBlock::Create(C, "entry", Ctor);
-      ReturnInst::Create(C, Entry);
-      return Ctor;
     }
   };
 
