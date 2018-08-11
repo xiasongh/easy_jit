@@ -30,38 +30,48 @@ static size_t GetNewArgCount(easy::Context const &C) {
   return Max;
 }
 
-FunctionType* GetWrapperTy(FunctionType *FTy, easy::Context const &C) {
+FunctionType* GetWrapperTy(FunctionType *FTy, bool StructReturn, easy::Context const &C) {
 
   Type* RetTy = FTy->getReturnType();
 
-  size_t NewArgCount = GetNewArgCount(C);
+  size_t StructReturnOffset = StructReturn ? 1 : 0;
+
+  size_t NewArgCount = GetNewArgCount(C) + StructReturnOffset;
   SmallVector<Type*, 8> Args(NewArgCount, nullptr);
+
+  if(StructReturn)
+    Args[0] = FTy->getParamType(0);
 
   for(size_t i = 0, n = C.size(); i != n; ++i) {
     if(auto const *Arg = C.getArgumentMapping(i).as<easy::ForwardArgument>()) {
-      size_t param_idx = Arg->get();
+      size_t param_idx = Arg->get() + StructReturnOffset;
       if(!Args[param_idx])
-        Args[param_idx] = FTy->getParamType(i);
+        Args[param_idx] = FTy->getParamType(i + StructReturnOffset);
     }
   }
 
   return FunctionType::get(RetTy, Args, FTy->isVarArg());
 }
 
-void GetInlineArgs(easy::Context const &C, FunctionType& OldTy, Function &Wrapper, SmallVectorImpl<Value*> &Args, IRBuilder<> &B) {
+void GetInlineArgs(easy::Context const &C, FunctionType& OldTy, bool StructReturn, Function &Wrapper, SmallVectorImpl<Value*> &Args, IRBuilder<> &B) {
   LLVMContext &Ctx = OldTy.getContext();
   SmallVector<Value*, 8> WrapperArgs(Wrapper.getFunctionType()->getNumParams());
   std::transform(Wrapper.arg_begin(), Wrapper.arg_end(),
                  WrapperArgs.begin(), [](llvm::Argument &A)->Value*{return &A;});
 
+  size_t StructReturnOffset = StructReturn ? 1 : 0;
+  if(StructReturn) {
+    Args.push_back(WrapperArgs[0]);
+  }
+
   for(size_t i = 0, n = C.size(); i != n; ++i) {
     auto const &Arg = C.getArgumentMapping(i);
-    Type* ParamTy = OldTy.getParamType(i);
+    Type* ParamTy = OldTy.getParamType(i+StructReturnOffset);
     switch(Arg.kind()) {
 
       case easy::ArgumentBase::AK_Forward: {
         auto const *Forward = Arg.as<easy::ForwardArgument>();
-        Args.push_back(WrapperArgs[Forward->get()]);
+        Args.push_back(WrapperArgs[Forward->get()+StructReturnOffset]);
       } break;
 
       case easy::ArgumentBase::AK_Int: {
@@ -171,7 +181,7 @@ void GetInlineArgs(easy::Context const &C, FunctionType& OldTy, Function &Wrappe
   }
 }
 
-Function* CreateWrapperFun(Module &M, FunctionType &WrapperTy, Function &F, easy::Context const &C) {
+Function* CreateWrapperFun(Module &M, FunctionType &WrapperTy, Function &F, bool StructReturn, easy::Context const &C) {
   LLVMContext &CC = M.getContext();
 
   Function* Wrapper = Function::Create(&WrapperTy, Function::ExternalLinkage, "", &M);
@@ -179,9 +189,13 @@ Function* CreateWrapperFun(Module &M, FunctionType &WrapperTy, Function &F, easy
   IRBuilder<> B(BB);
 
   SmallVector<Value*, 8> Args;
-  GetInlineArgs(C, *F.getFunctionType(), *Wrapper, Args, B);
+  GetInlineArgs(C, *F.getFunctionType(), StructReturn, *Wrapper, Args, B);
 
   Value* Call = B.CreateCall(&F, Args);
+
+  if(StructReturn) {
+    Wrapper->arg_begin()->addAttr(Attribute::StructRet);
+  }
 
   if(Call->getType()->isVoidTy()) {
     B.CreateRetVoid();
@@ -199,10 +213,11 @@ bool easy::InlineParameters::runOnModule(llvm::Module &M) {
   assert(F);
 
   FunctionType* FTy = F->getFunctionType();
-  assert(FTy->getNumParams() == C.size());
+  bool StructReturn = F->arg_begin()->hasStructRetAttr();
+  assert(FTy->getNumParams() == (C.size() + (StructReturn ? 1 : 0)));
 
-  FunctionType* WrapperTy = GetWrapperTy(FTy, C);
-  llvm::Function* WrapperFun = CreateWrapperFun(M, *WrapperTy, *F, C);
+  FunctionType* WrapperTy = GetWrapperTy(FTy, StructReturn, C);
+  llvm::Function* WrapperFun = CreateWrapperFun(M, *WrapperTy, *F, StructReturn, C);
 
   // privatize F, steal its name, copy its attributes, and its cc
   F->setLinkage(llvm::Function::PrivateLinkage);
