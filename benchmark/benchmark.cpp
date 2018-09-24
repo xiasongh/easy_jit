@@ -59,33 +59,29 @@ void swap(int v[], int i, int j)
 
 static const int mask[3][3] = {{1,2,3},{0,0,0},{3,2,1}};
 
-static void BM_convolve_jit(benchmark::State& state) {
+static void BM_convolve(benchmark::State& state) {
   using namespace std::placeholders;
+
+  bool jit = state.range(1);
   int n = state.range(0);
+  
   std::vector<int> image(n*n,0);
   std::vector<int> out((n-3)*(n-3),0);
-  benchmark::ClobberMemory();
 
   auto my_kernel = easy::jit(kernel, n, 3, _1, &mask[0][0], _2);
-  for (auto _ : state) {
-    my_kernel(image.data(), out.data());
-    benchmark::ClobberMemory();
-  }
-}
-BENCHMARK(BM_convolve_jit)->RangeMultiplier(2)->Range(16,1024);
 
-static void BM_convolve(benchmark::State& state) {
-  int n = state.range(0);
-  std::vector<int> image(n*n,0);
-  std::vector<int> out((n-3)*(n-3),0);
   benchmark::ClobberMemory();
 
   for (auto _ : state) {
-    kernel(n, 3, image.data(), &mask[0][0], out.data());
+    if(jit) {
+      my_kernel(image.data(), out.data());
+    } else {
+      kernel(n, 3, image.data(), &mask[0][0], out.data());
+    }
     benchmark::ClobberMemory();
   }
 }
-BENCHMARK(BM_convolve)->RangeMultiplier(2)->Range(16,1024);
+BENCHMARK(BM_convolve)->Ranges({{16,1024}, {0,1}});
 
 static void BM_convolve_compile_jit(benchmark::State& state) {
   using namespace std::placeholders;
@@ -109,35 +105,29 @@ static void BM_convolve_cache_hit_jit(benchmark::State& state) {
 }
 BENCHMARK(BM_convolve_cache_hit_jit);
 
-static void BM_qsort_jit(benchmark::State& state) {
+static void BM_qsort(benchmark::State& state) {
   using namespace std::placeholders;
+
+  bool jit = state.range(1);
   int n = state.range(0);
+
   std::vector<int> vec(n);
   std::iota(vec.begin(), vec.end(), 0);
   std::random_shuffle(vec.begin(), vec.end());
-  benchmark::ClobberMemory();
 
   auto my_qsort = easy::jit(Qsort, _1, _2, _3, int_cmp);
+  benchmark::ClobberMemory();
+
   for (auto _ : state) {
-    my_qsort(vec.data(), 0, vec.size()-1);
+    if(jit) {
+      my_qsort(vec.data(), 0, vec.size()-1);
+    } else {
+      Qsort(vec.data(), 0, vec.size()-1, int_cmp);
+    }
     benchmark::ClobberMemory();
   }
 }
-BENCHMARK(BM_qsort_jit)->RangeMultiplier(2)->Range(16,1024);
-
-static void BM_qsort(benchmark::State& state) {
-  int n = state.range(0);
-  std::vector<int> vec(n);
-  std::iota(vec.begin(), vec.end(), 0);
-  std::random_shuffle(vec.begin(), vec.end());
-    benchmark::ClobberMemory();
-
-  for (auto _ : state) {
-    Qsort(vec.data(), 0, vec.size()-1, int_cmp);
-    benchmark::ClobberMemory();
-  }
-}
-BENCHMARK(BM_qsort)->RangeMultiplier(2)->Range(16,1024);
+BENCHMARK(BM_qsort)->Ranges({{16,1024}, {0,1}});
 
 static void BM_qsort_compile_jit(benchmark::State& state) {
   using namespace std::placeholders;
