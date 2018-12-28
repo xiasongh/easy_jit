@@ -17,6 +17,10 @@
 #include <llvm/Analysis/TargetLibraryInfo.h> 
 #include <llvm/Support/FileSystem.h>
 
+#ifdef NDEBUG
+#include <llvm/IR/Verifier.h>
+#endif
+
 
 using namespace easy;
 
@@ -54,6 +58,11 @@ static void Optimize(llvm::Module& M, const char* Name, const easy::Context& C, 
   MPM.add(easy::createInlineParametersPass(Name));
   Builder.populateModulePassManager(MPM);
   MPM.add(easy::createDevirtualizeConstantPass(Name));
+
+#ifdef NDEBUG
+  MPM.add(llvm::createVerifierPass());
+#endif
+
   Builder.populateModulePassManager(MPM);
 
   MPM.run(M);

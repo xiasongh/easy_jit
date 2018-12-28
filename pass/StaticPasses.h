@@ -5,6 +5,7 @@
 
 namespace easy {
   llvm::Pass* createRegisterBitcodePass();
+  llvm::Pass* createRegisterLayoutPass();
 }
 
 #endif

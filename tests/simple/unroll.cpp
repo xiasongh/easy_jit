@@ -18,9 +18,9 @@
 
 using namespace std::placeholders;
 
-int dot(std::vector<int> a, std::vector<int> b) {
+int dot(int *a, std::vector<int> b, int n) {
   int x = 0;
-  for(size_t i = 0, n = a.size(); i != n; ++i) {
+  for(size_t i = 0; i != n; ++i) {
     x += a[i]*b[i];
   }
   return x;
@@ -31,7 +31,7 @@ int main(int, char** argv) {
   std::vector<int> a = {1,2,3,4},
                    b = {4,3,2,1};
 
-  auto dot_a = easy::jit(dot, a, _1, easy::options::dump_ir(argv[1]));
+  auto dot_a = easy::jit(dot, a.data(), _1, 4, easy::options::dump_ir(argv[1]));
   int x = dot_a(b);
 
   // CHECK: dot is 20

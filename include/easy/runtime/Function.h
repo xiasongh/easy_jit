@@ -24,7 +24,7 @@ namespace std {
 namespace easy {
 
 class Context;
-class GlobalMapping;
+struct GlobalMapping;
 
 class Function {
 
