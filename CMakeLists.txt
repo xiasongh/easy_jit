@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.4.3)
 
+if("${CMAKE_CURRENT_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_BINARY_DIR}")
+  message(FATAL_ERROR "Do not set the build directory equal to the source directory!")
+endif()
+
 find_package(LLVM 6.0 REQUIRED CONFIG)
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in ${LLVM_DIR}")
