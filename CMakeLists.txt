@@ -4,6 +4,13 @@ if("${CMAKE_CURRENT_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_BINARY_DIR}")
   message(FATAL_ERROR "Do not set the build directory equal to the source directory!")
 endif()
 
+message(STATUS "CPU Architecture: ${CMAKE_HOST_SYSTEM_PROCESSOR}")
+if (${CMAKE_HOST_SYSTEM_PROCESSOR} MATCHES "x86_64")
+	add_definitions(-D_X86)
+elseif (${CMAKE_HOST_SYSTEM_PROCESSOR} MATCHES "aarch64")
+	add_definitions(-D_AARCH64)
+endif()
+
 find_package(LLVM 6.0 REQUIRED CONFIG)
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in ${LLVM_DIR}")
