@@ -1,8 +1,6 @@
 Easy::jit: A just-in-time compiler for C++
 ==========================================
 
-[![Build Status](https://travis-ci.org/jmmartinez/easy-just-in-time.svg?branch=master)](https://travis-ci.org/jmmartinez/easy-just-in-time)
-
 About
 -----
 
