@@ -14,7 +14,7 @@ execute_process(COMMAND "${PYTHON_EXEC}" "-c"
 "import sys; print('%d.%d' % (sys.version_info[0],sys.version_info[1]))"
 OUTPUT_VARIABLE PYTHON_VERSION
 OUTPUT_STRIP_TRAILING_WHITESPACE)
-string(REPLACE "." "" PYTHON_VERSION_NO_DOTS ${PYTHON_VERSION})
+# string(REPLACE "." "" PYTHON_VERSION_NO_DOTS ${PYTHON_VERSION})
 
 
 function(find_python_module module)

@@ -26,7 +26,7 @@ std::string easy::GetEntryFunctionName(Module const &M) {
     if(!Entry || !Name || Entry->getString() != EntryTag)
       continue;
 
-    return Name->getString();
+    return Name->getString().str();
   }
 
   llvm_unreachable("No entry function in easy::jit module!");
@@ -57,7 +57,7 @@ easy::CloneModuleWithContext(llvm::Module const &LM, llvm::LLVMContext &C) {
   // write module
   {
     llvm::raw_string_ostream stream(buf);
-    llvm::WriteBitcodeToFile(&LM, stream);
+    llvm::WriteBitcodeToFile(LM, stream);
     stream.flush();
   }
 

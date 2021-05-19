@@ -1,4 +1,4 @@
-add_llvm_loadable_module(EasyJitPass
+add_llvm_library(EasyJitPass MODULE
   RegisterPasses.cpp
   Easy.cpp
   Layout.cpp

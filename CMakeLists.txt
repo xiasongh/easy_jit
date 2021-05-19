@@ -11,7 +11,7 @@ elseif (${CMAKE_HOST_SYSTEM_PROCESSOR} MATCHES "aarch64")
 	add_definitions(-D_AARCH64)
 endif()
 
-find_package(LLVM 6.0 REQUIRED CONFIG)
+find_package(LLVM 11.1.0 REQUIRED CONFIG)
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in ${LLVM_DIR}")
 message(STATUS "LLVM Root: ${LLVM_TOOLS_BINARY_DIR}")

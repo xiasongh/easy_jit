@@ -10,7 +10,10 @@
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 #include <llvm/Support/raw_ostream.h>
+#include "llvm/IR/InstrTypes.h"
 #include <numeric>
+
+#include <iostream>
 
 using namespace llvm;
 
@@ -133,11 +136,11 @@ bool CastCallWithPointerCasts(FunctionType* CalledTy, FunctionType* UncastedTy) 
 template<class IIter>
 void RecastCalls(IIter it, IIter end) {
   for(;it != end;) {
-    CallSite CS{&*it++};
-    if(!CS)
+    CallBase * CB = dyn_cast<CallBase>(&*it++);
+    if(!CB)
       continue;
 
-    Value* Called = CS.getCalledValue();
+    Value* Called = CB->getCalledOperand();
     Value* Uncasted = Called->stripPointerCasts();
     if(Called == Uncasted)
       continue;
@@ -148,24 +151,26 @@ void RecastCalls(IIter it, IIter end) {
     if(!CastCallWithPointerCasts(CalledTy, UncastedTy))
       continue;
 
-    CS.setCalledFunction(Uncasted);
-    CS.mutateFunctionType(UncastedTy);
+    CB->setCalledFunction((Function *) Uncasted);
+    CB->mutateFunctionType(UncastedTy);
 
     // cast every pointer argument to the expected type
-    IRBuilder<> B(CS.getInstruction());
+    IRBuilder<> B(CB);
 
-    size_t N = CS.getNumArgOperands();
+    size_t N = CB->getNumArgOperands();
     for(unsigned i = 0; i != N; ++i) {
-      Value* Arg = CS.getArgOperand(i);
+      Value* Arg = CB->getArgOperand(i);
       Type* ArgTy = Arg->getType();
       Type* UncTy = UncastedTy->getParamType(i);
       if(ArgTy->isPointerTy() && ArgTy != UncTy)
-        CS.setArgument(i, B.CreatePointerCast(Arg, UncTy, Arg->getName() + ".recast_calls"));
+        CB->setArgOperand(i, B.CreatePointerCast(Arg, UncTy, Arg->getName() + ".recast_calls"));
     }
   }
 }
 
 bool easy::DevirtualizeConstant::runOnFunction(llvm::Function &F) {
+
+  std::cout << "run on function by devir pass" << std::endl;
 
   if(F.getName() != TargetName_)
     return false;

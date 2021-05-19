@@ -15,7 +15,7 @@
 #include <llvm/Transforms/Utils/Cloning.h>
 
 #include <llvm/Bitcode/BitcodeWriter.h>
-
+#include "llvm/IR/InstrTypes.h"
 #include <llvm/ADT/SetVector.h>
 
 #define DEBUG_TYPE "easy-register-bitcode"
@@ -27,6 +27,7 @@
 #include <llvm/Support/raw_ostream.h>
 
 #include <memory>
+#include <iostream>
 
 #include "MayAliasTracer.h"
 #include "StaticPasses.h"
@@ -46,6 +47,8 @@ namespace easy {
       : ModulePass(ID) {};
 
     bool runOnModule(Module &M) override {
+
+      std::cout << "run on module by easy pass" << std::endl;
 
       // execute the rest of the easy::jit passes
       legacy::PassManager Passes;
@@ -145,10 +148,10 @@ namespace easy {
 
         std::string Reason;
         if(!canExtractBitcode(GO, Reason)) {
-          DEBUG(dbgs() << "Could not extract global '" << GO.getName() << "'. " << Reason << "\n");
+          //DEBUG(dbgs() << "Could not extract global '" << GO.getName() << "'. " << Reason << "\n");
           continue;
         }
-        DEBUG(dbgs() << "Global '" << GO.getName() << "' marked for extraction.\n");
+        //DEBUG(dbgs() << "Global '" << GO.getName() << "' marked for extraction.\n");
 
         ObjectsToJIT.push_back(&GO);
       }
@@ -229,9 +232,10 @@ namespace easy {
     void deduceObjectsToJIT(Module &M) {
       for(Function &EasyJitFun : compilerInterface(M)) {
         for(User* U : EasyJitFun.users()) {
-          if(CallSite CS{U}) {
-            for(Value* O : CS.args()) {
-              O = O->stripPointerCastsNoFollowAliases();
+          CallBase * CB = dyn_cast<CallBase>(U);
+          if(CB) {
+            for(Value* O : CB->args()) {
+              O = O->stripPointerCastsAndAliases();
               MayAliasTracer Tracer(O);
               for(GlobalObject& GO: M.global_objects()) {
                 if(isConstant(GO) and Tracer.count(GO)) {
@@ -299,7 +303,7 @@ namespace easy {
     }
 
     static GlobalVariable* embedBitcode(Module &M, GlobalObject& GO) {
-      std::unique_ptr<Module> Embed = CloneModule(&M);
+      std::unique_ptr<Module> Embed = CloneModule(M);
 
       GlobalValue *FEmbed = Embed->getNamedValue(GO.getName());
       assert(FEmbed && "global value with that name exists");
@@ -314,7 +318,7 @@ namespace easy {
     static std::string moduleToString(Module &M) {
       std::string s;
       raw_string_ostream so(s);
-      WriteBitcodeToFile(&M, so);
+      WriteBitcodeToFile(M, so);
       so.flush();
       return s;
     }

@@ -1,5 +1,6 @@
 #include <easy/attributes.h>
 
+#include <llvm/Pass.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/IntrinsicInst.h>
@@ -14,6 +15,7 @@
 
 #include "Utils.h"
 #include <numeric>
+#include <iostream>
 
 using namespace llvm;
 
@@ -25,6 +27,8 @@ namespace easy {
       : ModulePass(ID) {};
 
     bool runOnModule(Module &M) override {
+
+      std::cout << "run on module by layout pass" << std::endl;
 
       SmallVector<Function*, 8> LayoutFunctions;
       collectLayouts(M, LayoutFunctions);

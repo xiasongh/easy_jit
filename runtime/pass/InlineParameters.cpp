@@ -11,6 +11,7 @@
 #include <llvm/Transforms/Utils/Cloning.h>
 #include <llvm/Support/raw_ostream.h>
 #include <numeric>
+#include <iostream>
 
 #include "InlineParametersHelper.h"
 
@@ -208,6 +209,8 @@ Function* CreateWrapperFun(Module &M, Function &F, HighLevelLayout &HLL, easy::C
 }
 
 bool easy::InlineParameters::runOnModule(llvm::Module &M) {
+
+  std::cout << "run on module by inline parameters pass" << std::endl;
 
   easy::Context const &C = getAnalysis<ContextAnalysis>().getContext();
   llvm::Function* F = M.getFunction(TargetName_);
