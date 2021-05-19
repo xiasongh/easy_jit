@@ -27,9 +27,7 @@ namespace easy {
       : ModulePass(ID) {};
 
     bool runOnModule(Module &M) override {
-
-      std::cout << "run on module by layout pass" << std::endl;
-
+      
       SmallVector<Function*, 8> LayoutFunctions;
       collectLayouts(M, LayoutFunctions);
 

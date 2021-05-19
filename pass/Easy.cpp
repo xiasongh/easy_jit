@@ -47,9 +47,7 @@ namespace easy {
       : ModulePass(ID) {};
 
     bool runOnModule(Module &M) override {
-
-      std::cout << "run on module by easy pass" << std::endl;
-
+      
       // execute the rest of the easy::jit passes
       legacy::PassManager Passes;
       Passes.add(easy::createRegisterLayoutPass());

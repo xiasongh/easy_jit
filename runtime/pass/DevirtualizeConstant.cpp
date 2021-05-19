@@ -170,8 +170,6 @@ void RecastCalls(IIter it, IIter end) {
 
 bool easy::DevirtualizeConstant::runOnFunction(llvm::Function &F) {
 
-  std::cout << "run on function by devir pass" << std::endl;
-
   if(F.getName() != TargetName_)
     return false;
 
