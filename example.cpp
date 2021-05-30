@@ -3,29 +3,6 @@
 // RUN: %FileCheck %s < %t.out
 
 #include <easy/jit.h>
-#include <easy/runtime/Context.h>
-#include <easy/attributes.h>
-#include <easy/param.h>
-#include <easy/function_wrapper.h>
-
-#include <easy/runtime/BitcodeTracker.h>
-#include <easy/runtime/Function.h>
-#include <easy/runtime/RuntimePasses.h>
-#include <easy/runtime/LLVMHolderImpl.h>
-#include <easy/runtime/Utils.h>
-#include <easy/exceptions.h>
-
-#include <llvm/Bitcode/BitcodeWriter.h>
-#include <llvm/Bitcode/BitcodeReader.h>
-#include <llvm/Transforms/IPO/PassManagerBuilder.h>
-#include <llvm/Transforms/IPO.h>
-#include <llvm/IR/LegacyPassManager.h>
-#include <llvm/Support/Host.h> 
-#include <llvm/Target/TargetMachine.h> 
-#include <llvm/Support/TargetRegistry.h> 
-#include <llvm/Analysis/TargetTransformInfo.h> 
-#include <llvm/Analysis/TargetLibraryInfo.h> 
-#include <llvm/Support/FileSystem.h>
 
 #include <functional>
 #include <cstdio>
@@ -34,6 +11,18 @@ using namespace std::placeholders;
 
 double add (double a, double b) {
   return a+b;
+}
+
+template<class T, class ... Args>
+std::unique_ptr<easy::Function> get_function(easy::Context const &C, T &&Fun) {
+  auto* FunPtr = easy::meta::get_as_pointer(Fun);
+  return easy::Function::Compile(reinterpret_cast<void*>(FunPtr), C);
+}
+
+template<class T, class ... Args>
+std::unique_ptr<easy::Function> EASY_JIT_COMPILER_INTERFACE _jit(T &&Fun, Args&& ... args) {
+  auto C = easy::get_context_for<T, Args...>(std::forward<Args>(args)...);
+  return get_function<T, Args...>(C, std::forward<T>(Fun));
 }
 
 void WriteOptimizedToFile(llvm::Module const &M) {
@@ -45,7 +34,7 @@ void WriteOptimizedToFile(llvm::Module const &M) {
 }
 
 int main() {
-  auto CompiledFunction = easy::_jit(add, _1, 1);
+  std::unique_ptr<easy::Function> CompiledFunction = _jit(add, _1, 1);
 
   llvm::Module const & M = CompiledFunction->getLLVMModule();
   
