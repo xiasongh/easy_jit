@@ -36,48 +36,20 @@ double add (double a, double b) {
   return a+b;
 }
 
-std::unique_ptr<llvm::Module> _Compile(void *Addr, easy::Context const& C) {
+void WriteOptimizedToFile(llvm::Module const &M) {
 
-  auto &BT = BitcodeTracker::GetTracker();
+  std::error_code Error;
+  llvm::raw_fd_ostream Out("bitcode", Error, llvm::sys::fs::F_None);
 
-  const char* Name;
-  GlobalMapping* Globals;
-  std::tie(Name, Globals) = BT.getNameAndGlobalMapping(Addr);
-
-  std::unique_ptr<llvm::Module> M;
-  std::unique_ptr<llvm::LLVMContext> Ctx;
-  std::tie(M, Ctx) = BT.getModule(Addr);
-
-  return M;
-}
-
-template<class T, class ... Args>
-std::unique_ptr<llvm::Module> _jit_with_context(easy::Context const &C, T &&Fun) {
-
-  auto* FunPtr = meta::get_as_pointer(Fun);
-
-  std::unique_ptr<llvm::Module> M = _Compile(reinterpret_cast<void*>(FunPtr), C);
-
-  return M;
-}
-
-template<class T, class ... Args>
-auto EASY_JIT_COMPILER_INTERFACE _get_module(T &&Fun, Args&& ... args) {
-  auto C = get_context_for<T, Args...>(std::forward<Args>(args)...);
-  return _jit_with_context<T, Args...>(C, std::forward<T>(Fun));
+  Out << M;
 }
 
 int main() {
-  easy::FunctionWrapper<double(double)> inc = easy::jit(add, _1, 1);
+  auto CompiledFunction = easy::_jit(add, _1, 1);
 
-  std::unique_ptr<llvm::Module> M = _get_module(add, _1, _2);
-
-  // CHECK: inc(4.00) is 5.00
-  // CHECK: inc(5.00) is 6.00
-  // CHECK: inc(6.00) is 7.00
-  // CHECK: inc(7.00) is 8.00
-  for(int v = 4; v != 8; ++v)
-    printf("inc(%.2f) is %.2f\n", (double)v, inc(v));
+  llvm::Module const & M = CompiledFunction->getLLVMModule();
+  
+  WriteOptimizedToFile(M);
 
   return 0;
 }

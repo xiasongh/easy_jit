@@ -6,6 +6,19 @@
 #include <easy/param.h>
 #include <easy/function_wrapper.h>
 
+#include <llvm/Bitcode/BitcodeWriter.h>
+#include <llvm/Bitcode/BitcodeReader.h>
+#include <llvm/Transforms/IPO/PassManagerBuilder.h>
+#include <llvm/Transforms/IPO.h>
+#include <llvm/IR/LegacyPassManager.h>
+#include <llvm/Support/Host.h> 
+#include <llvm/Target/TargetMachine.h> 
+#include <llvm/Support/TargetRegistry.h> 
+#include <llvm/Analysis/TargetTransformInfo.h> 
+#include <llvm/Analysis/TargetLibraryInfo.h> 
+#include <llvm/Support/FileSystem.h>
+
+
 #include <memory>
 #include <type_traits>
 #include <tuple>
@@ -40,6 +53,22 @@ auto jit_with_context(easy::Context const &C, T &&Fun) {
 }
 
 template<class T, class ... Args>
+auto _jit_with_context(easy::Context const &C, T &&Fun) {
+
+  auto* FunPtr = meta::get_as_pointer(Fun);
+  using FunOriginalTy = std::remove_pointer_t<std::decay_t<T>>;
+
+  using new_type_traits = meta::new_function_traits<FunOriginalTy, meta::type_list<Args...>>;
+  using new_return_type = typename new_type_traits::return_type;
+  using new_parameter_types = typename new_type_traits::parameter_list;
+
+  auto CompiledFunction =
+      Function::Compile(reinterpret_cast<void*>(FunPtr), C);
+
+  return CompiledFunction;
+}
+
+template<class T, class ... Args>
 easy::Context get_context_for(Args&& ... args) {
   using FunOriginalTy = std::remove_pointer_t<std::decay_t<T>>;
   static_assert(std::is_function<FunOriginalTy>::value,
@@ -61,6 +90,12 @@ template<class T, class ... Args>
 auto EASY_JIT_COMPILER_INTERFACE jit(T &&Fun, Args&& ... args) {
   auto C = get_context_for<T, Args...>(std::forward<Args>(args)...);
   return jit_with_context<T, Args...>(C, std::forward<T>(Fun));
+}
+
+template<class T, class ... Args>
+auto EASY_JIT_COMPILER_INTERFACE _jit(T &&Fun, Args&& ... args) {
+  auto C = get_context_for<T, Args...>(std::forward<Args>(args)...);
+  return _jit_with_context<T, Args...>(C, std::forward<T>(Fun));
 }
 
 }
