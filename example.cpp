@@ -3,6 +3,7 @@
 // RUN: %FileCheck %s < %t.out
 
 #include <easy/jit.h>
+#include <llvm/Transforms/Utils/Cloning.h>
 
 #include <functional>
 #include <cstdio>
@@ -38,7 +39,9 @@ int main() {
 
   llvm::Module const & M = CompiledFunction->getLLVMModule();
   
-  WriteOptimizedToFile(M);
+  std::unique_ptr<llvm::Module> Embed = llvm::CloneModule(M);
+
+  WriteOptimizedToFile(*Embed);
 
   return 0;
 }
