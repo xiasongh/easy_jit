@@ -1,14 +1,18 @@
-apt-get update
-apt-get install -y software-properties-common
-apt-add-repository -y "ppa:ubuntu-toolchain-r/test" 
+sudo apt-get update
+sudo apt-get install -y software-properties-common
+sudo apt-add-repository -y "ppa:ubuntu-toolchain-r/test" 
 
-apt-get install wget curl -y
+sudo apt-get install wget curl -y
 
-apt-get install -y ninja-build g++-11 libopencv-dev
-apt-get install -y build-essential git unzip cmake 
+sudo apt-get install -y ninja-build g++-11 libopencv-dev
+sudo apt-get install -y build-essential git unzip cmake 
 
-add-apt-repository universe
-apt install python2 -y
+wget https://apt.llvm.org/llvm.sh
+chmod +x llvm.sh
+./llvm.sh 11
+
+sudo add-apt-repository universe
+sudo apt install python2 -y
 curl https://bootstrap.pypa.io/pip/2.7/get-pip.py --output get-pip.py
 python2 get-pip.py 
 
