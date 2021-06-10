@@ -50,7 +50,4 @@ add_subdirectory(runtime)
 
 add_custom_target(easy-jit-core DEPENDS EasyJitPass EasyJitRuntime)
 
-add_subdirectory(doc)
-add_subdirectory(benchmark)
-
 include(CMakeTests.txt)
