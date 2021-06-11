@@ -19,5 +19,5 @@ python2 get-pip.py
 pip install --user --upgrade "pip < 21.0"
 pip install --user -Iv lit==0.7.0
 
-cmake -DLLVM_DIR=/usr/lib/llvm-11/cmake -DCMAKE_CXX_COMPILER=clang++-11 -DCMAKE_C_COMPILER=clang-11 -DEASY_JIT_EXAMPLE=ON .. -G Ninja
-ninja && ninja install && ninja check
+cmake -DLLVM_DIR=/usr/lib/llvm-11/cmake -DCMAKE_CXX_COMPILER=clang++-11 -DCMAKE_C_COMPILER=clang-11 -DEASY_JIT_EXAMPLE=ON .. 
+make
