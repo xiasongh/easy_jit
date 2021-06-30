@@ -77,6 +77,24 @@ auto EASY_JIT_COMPILER_INTERFACE jit(T &&Fun, Args&& ... args) {
   return jit_with_context<T, Args...>(C, std::forward<T>(Fun));
 }
 
+template<class T, class ... Args> std::unique_ptr<llvm::Module> EASY_JIT_COMPILER_INTERFACE easy_jit(T &&Fun, Args&& ... args) 
+{
+    auto easy_ctx = easy::get_context_for<T, Args...>(std::forward<Args>(args)...);
+    auto* func_ptr = easy::meta::get_as_pointer(Fun);
+    std::unique_ptr<easy::Function> easy_function = easy::Function::Compile(reinterpret_cast<void*>(func_ptr), easy_ctx);
+    llvm::Module const & M = easy_function->getLLVMModule();
+    std::unique_ptr<llvm::Module> llmod = llvm::CloneModule(M);
+    easy_function.release();
+
+    for (Function & func: *llmod){
+        func.addFnAttr(Attribute::AlwaysInline);
+        func.removeFnAttr(Attribute::OptimizeNone);
+    }
+
+    return llmod;
+}
+
+
 }
 
 #endif
