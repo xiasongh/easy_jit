@@ -17,6 +17,7 @@
 #include <llvm/Analysis/TargetTransformInfo.h> 
 #include <llvm/Analysis/TargetLibraryInfo.h> 
 #include <llvm/Support/FileSystem.h>
+#include <llvm/Transforms/Utils/Cloning.h>
 
 
 #include <memory>
@@ -79,14 +80,14 @@ auto EASY_JIT_COMPILER_INTERFACE jit(T &&Fun, Args&& ... args) {
 
 template<class T, class ... Args> std::unique_ptr<llvm::Module> EASY_JIT_COMPILER_INTERFACE easy_jit(T &&Fun, Args&& ... args) 
 {
-    auto easy_ctx = easy::get_context_for<T, Args...>(std::forward<Args>(args)...);
-    auto* func_ptr = easy::meta::get_as_pointer(Fun);
-    std::unique_ptr<easy::Function> easy_function = easy::Function::Compile(reinterpret_cast<void*>(func_ptr), easy_ctx);
+    auto easy_ctx = get_context_for<T, Args...>(std::forward<Args>(args)...);
+    auto* func_ptr = meta::get_as_pointer(Fun);
+    std::unique_ptr<easy::Function> easy_function = Function::Compile(reinterpret_cast<void*>(func_ptr), easy_ctx);
     llvm::Module const & M = easy_function->getLLVMModule();
     std::unique_ptr<llvm::Module> llmod = llvm::CloneModule(M);
     easy_function.release();
 
-    for (Function & func: *llmod){
+    for (llvm::Function & func: *llmod){
         func.addFnAttr(Attribute::AlwaysInline);
         func.removeFnAttr(Attribute::OptimizeNone);
     }
