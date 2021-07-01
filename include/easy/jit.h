@@ -88,8 +88,8 @@ template<class T, class ... Args> std::unique_ptr<llvm::Module> EASY_JIT_COMPILE
     easy_function.release();
 
     for (llvm::Function & func: *llmod){
-        func.addFnAttr(Attribute::AlwaysInline);
-        func.removeFnAttr(Attribute::OptimizeNone);
+        func.addFnAttr(llvm::Attribute::AlwaysInline);
+        func.removeFnAttr(llvm::Attribute::OptimizeNone);
     }
 
     return llmod;
