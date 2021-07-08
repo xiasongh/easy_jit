@@ -307,7 +307,7 @@ namespace easy {
       assert(FEmbed && "global value with that name exists");
       cleanModule(*FEmbed, *Embed);
 
-      Twine ModuleName = GO.getName() + "_bitcode";
+      Twine ModuleName = GO.getName().str() + "_bitcode";
       Embed->setModuleIdentifier(ModuleName.str());
 
       return writeModuleToGlobal(M, *Embed, FEmbed->getName() + "_bitcode");
