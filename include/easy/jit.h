@@ -1,6 +1,7 @@
 #ifndef EASY
 #define EASY
 
+#include <easy/runtime/BitcodeTracker.h>
 #include <easy/runtime/Context.h>
 #include <easy/attributes.h>
 #include <easy/param.h>
@@ -95,6 +96,14 @@ template<class T, class ... Args> std::unique_ptr<llvm::Module> EASY_JIT_COMPILE
     return llmod;
 }
 
+template<typename T, typename... Args>
+std::unique_ptr<llvm::Module> EASY_JIT_COMPILER_INTERFACE get_module(llvm::LLVMContext& ctx, T&& fn, Args&&... args)
+{
+    auto &BT = BitcodeTracker::GetTracker();
+    auto* fn_ptr = reinterpret_cast<void*>(meta::get_as_pointer(fn));
+    auto mod = BT.getModuleWithContext(fn_ptr, ctx);
+    return mod;
+}
 
 }
 
