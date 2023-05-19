@@ -12,9 +12,9 @@
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/Support/Host.h> 
 #include <llvm/Target/TargetMachine.h> 
-#include <llvm/Support/TargetRegistry.h> 
 #include <llvm/Analysis/TargetTransformInfo.h> 
 #include <llvm/Analysis/TargetLibraryInfo.h> 
+#include <llvm/MC/TargetRegistry.h>
 #include <llvm/Support/FileSystem.h>
 
 #ifdef NDEBUG
@@ -95,7 +95,7 @@ static void WriteOptimizedToFile(llvm::Module const &M, std::string const& File)
   if(File.empty())
     return;
   std::error_code Error;
-  llvm::raw_fd_ostream Out(File, Error, llvm::sys::fs::F_None);
+  llvm::raw_fd_ostream Out(File, Error, llvm::sys::fs::OF_None);
 
   if(Error)
     throw CouldNotOpenFile(Error.message());

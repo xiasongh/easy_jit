@@ -162,7 +162,7 @@ void GetInlineArgs(easy::Context const &C,
 void RemapAttributes(Function const &F, HighLevelLayout const& HLL, Function &Wrapper, HighLevelLayout const& NewHLL) {
   auto FAttributes = F.getAttributes();
 
-  auto FunAttrs = FAttributes.getFnAttributes();
+  auto FunAttrs = FAttributes.getFnAttrs();
   for(Attribute Attr : FunAttrs)
     Wrapper.addFnAttr(Attr);
 
@@ -171,8 +171,10 @@ void RemapAttributes(Function const &F, HighLevelLayout const& HLL, Function &Wr
     auto const &OrgArg = HLL.Args_[NewArg.Position_];
 
     for(size_t field = 0; field != NewArg.Types_.size(); ++field) {
-      Wrapper.addParamAttrs(field + NewArg.FirstParamIdx_,
-                             FAttributes.getParamAttributes(field + OrgArg.FirstParamIdx_));
+      auto paramAttrs = FAttributes.getParamAttrs(field + OrgArg.FirstParamIdx_);
+      for (auto attr : paramAttrs) {
+        Wrapper.addParamAttr(field + NewArg.FirstParamIdx_, attr);
+      }
     }
   }
 }

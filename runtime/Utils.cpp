@@ -1,6 +1,7 @@
 #include <llvm/IR/Metadata.h>
 #include <llvm/IR/Module.h>
 #include <llvm/ADT/SmallVector.h>
+#include "llvm/Support/MemoryBuffer.h"
 
 #include <llvm/Bitcode/BitcodeWriter.h>
 #include <llvm/Bitcode/BitcodeReader.h>

@@ -157,7 +157,7 @@ void RecastCalls(IIter it, IIter end) {
     // cast every pointer argument to the expected type
     IRBuilder<> B(CB);
 
-    size_t N = CB->getNumArgOperands();
+    size_t N = CB->arg_size();
     for(unsigned i = 0; i != N; ++i) {
       Value* Arg = CB->getArgOperand(i);
       Type* ArgTy = Arg->getType();

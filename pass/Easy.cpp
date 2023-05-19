@@ -181,7 +181,7 @@ namespace easy {
           if(!Tag || !Tag->isTBAAVtableAccess())
             continue;
 
-          VirtualMethodTys.insert(cast<PointerType>(cast<PointerType>(LI->getType())->getElementType())->getElementType());
+          VirtualMethodTys.insert(cast<PointerType>(cast<PointerType>(LI->getType())->getContainedType(0))->getContainedType(0));
         }
       }
 

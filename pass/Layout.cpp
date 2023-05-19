@@ -82,10 +82,10 @@ namespace easy {
                                 Value* Buf, Value* ByVal, Type* CurLevelTy, SmallVectorImpl<Value*> &GEPOffset) {
       StructType* Struct = dyn_cast<StructType>(CurLevelTy);
       if(!Struct) {
-        Value* ArgPtr = B.CreateGEP(ByVal, GEPOffset);
-        Value* Argument = B.CreateLoad(ArgPtr);
+        Value* ArgPtr = B.CreateGEP(ByVal->getType(), ByVal, GEPOffset);
+        Value* Argument = B.CreateLoad(ArgPtr->getType(), ArgPtr);
 
-        Value* Ptr = B.CreateConstGEP1_32(Buf, Offset);
+        Value* Ptr = B.CreateConstGEP1_32(Buf->getType(), Buf, Offset);
         B.CreateStore(Argument, Ptr);
 
         Offset += DL.getTypeStoreSize(Argument->getType());
@@ -106,7 +106,7 @@ namespace easy {
         Value *Argument = F->arg_begin()+Arg;
         Type* ArgTy = Argument->getType();
 
-        Value* Ptr = B.CreateConstGEP1_32(Buf, Offset);
+        Value* Ptr = B.CreateConstGEP1_32(Buf->getType(), Buf, Offset);
         Ptr = B.CreatePointerCast(Ptr, PointerType::getUnqual(ArgTy), Argument->getName() + ".ptr");
         B.CreateStore(Argument, Ptr);
 
